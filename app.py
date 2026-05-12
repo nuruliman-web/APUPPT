@@ -1,29 +1,49 @@
 import streamlit as st
-import screening_tab as sc
+from kegiatan_tracker import run_kegiatan_tracker
 
-# KUNCI TAMPILAN FULLSCREEN
-st.set_page_config(page_title="Compliance System v1.1", layout="wide")
+# Konfigurasi Halaman
+st.set_page_config(page_title="Screening & Compliance", layout="wide")
 
-def main():
-    # Simulasi Session State (Seolah-olah sudah login)
-    if 'user' not in st.session_state:
-        st.session_state['user'] = "imanmuhamad9@gmail.com"
-        st.session_state['role'] = "Admin"
+# Sidebar Navigasi
+st.sidebar.title("Menu Utama")
+menu = st.sidebar.radio("Pilih Fitur:", ["Cross-Check Database", "Log Kegiatan"])
 
-    # Header Aplikasi
-    c1, c2 = st.columns([10, 2])
-    c1.title("🏦 Screening System")
-    if c2.button("Keluar"):
-        st.write("Logout Berhasil")
-
-    st.divider()
-
-    # Panggil fungsi dari file screening_tab.py
-    # 1. Ambil data
-    db_p, stats, total = sc.fetch_all_data()
+if menu == "Cross-Check Database":
+    st.title("🔍 Cross-Check Database Pemerintah")
+    st.write("Bandingkan data internal dengan database pemerintah (Upload Excel).")
     
-    # 2. Jalankan tampilan screening
-    sc.run_pencarian(st.session_state['user'], db_p, True)
+    # Fitur upload dan logika pembanding diletakkan di sini
+    import pandas as pd
+    from thefuzz import fuzz
 
-if __name__ == "__main__":
-    main()
+    col1, col2 = st.columns(2)
+    with col1:
+        file_int = st.file_uploader("Upload Data Internal (Excel)", type=['xlsx'])
+    with col2:
+        file_gov = st.file_uploader("Upload Database Pemerintah (Excel)", type=['xlsx'])
+
+    if file_int and file_gov:
+        df_internal = pd.read_excel(file_int)
+        dict_gov = pd.read_excel(file_gov, sheet_name=None)
+        
+        threshold = st.sidebar.slider("Ambang Kemiripan Nama (%)", 50, 100, 80)
+        
+        st.subheader("Mapping Kolom Data Internal")
+        cols = df_internal.columns.tolist()
+        col_nama = st.selectbox("Pilih Kolom Nama", cols)
+        col_nik = st.selectbox("Pilih Kolom NIK", cols)
+
+        if st.button("🚀 Mulai Cross-Check"):
+            for index, row in df_internal.iterrows():
+                nama_target = str(row[col_nama]).lower().strip()
+                nik_target = str(row[col_nik]).strip()
+                
+                for sheet_name, df_gov in dict_gov.items():
+                    # Logika pencocokan sederhana
+                    match = df_gov[df_gov.apply(lambda r: fuzz.token_sort_ratio(nama_target, str(r.iloc[0]).lower()) >= threshold, axis=1)]
+                    if not match.empty:
+                        st.success(f"Match ditemukan di sheet {sheet_name} untuk: {nama_target}")
+                        st.dataframe(match)
+
+elif menu == "Log Kegiatan":
+    run_kegiatan_tracker()
